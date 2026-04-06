@@ -36,6 +36,7 @@ typedef struct {
     
     float pressureMultiplier;
     float targetDensity;
+    float densityMultiplier;
 } FrameUniforms;
 
 typedef enum BufferIndex {

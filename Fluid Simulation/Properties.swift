@@ -26,4 +26,5 @@ final class Properties {
     var smoothingRadius: Float = 5.0
     var targetDensity: Float = 2.5
     var pressureMultiplier: Float = 50
+    var densityMultiplier: Float = 1
 }

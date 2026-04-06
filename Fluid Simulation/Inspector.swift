@@ -352,6 +352,16 @@ struct ControlsView: View {
                 step: 0.001,
                 decimals: 4
             )
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.densityMultiplier },
+                    set: { properties.densityMultiplier = $0 }
+                ),
+                title: "Density Multiplier",
+                step: 2,
+                decimals: 4
+            )
 
 
             Vec2Input(

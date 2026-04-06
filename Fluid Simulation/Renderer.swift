@@ -169,7 +169,8 @@ final class Renderer: NSObject, MTKViewDelegate {
             activateCollisions: properties.enableCollisions ? 1 : 0,
             smoothingRadius: properties.smoothingRadius,
             pressureMultiplier: properties.pressureMultiplier,
-            targetDensity: properties.targetDensity
+            targetDensity: properties.targetDensity,
+            densityMultiplier: properties.densityMultiplier
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
@@ -265,6 +266,24 @@ final class Renderer: NSObject, MTKViewDelegate {
 
             needsParticleLayout = false
         }
+        
+        var totalDensity: Float = 0
+        let sampleCount = min(10, cachedParticleCount)
+        for i in 0 ..< sampleCount {
+            var density: Float = 0
+            let point = particles[i].position
+            for j in 0 ..< cachedParticleCount {
+                let dst = simd_length(particles[j].position - point)
+                let r = properties.smoothingRadius
+                if dst < r {
+                    let value = max(0, r*r - dst*dst)
+                    let volume = Float.pi * pow(r, 8) / 4
+                    density += pow(value, 3) / volume
+                }
+            }
+            totalDensity += density
+        }
+        properties.targetDensity = totalDensity / Float(sampleCount)
     }
 
     func particleLayoutMetrics() -> (count: Int, columns: Int, rows: Int, radius: Float, step: Float) {

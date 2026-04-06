@@ -79,15 +79,9 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
     float2 viewportSize = float2(width, height);
     float2 worldPoint = pixelToWorld(pixel, viewportSize, scale);
     
-    float density = calculateDensity(worldPoint, particles, uniforms);
+    float density = calculateDensity(worldPoint, particles, uniforms) * uniforms.densityMultiplier;
     
-    
-    float targetDensity = max(uniforms.targetDensity, 1e-5);
-    float densityRatio = density / targetDensity;
-    float signedPressure = (densityRatio - 1.0) * max(uniforms.pressureMultiplier, 1.0) * 0.25;
-    color = colorPressure(tanh(signedPressure));
-    color = float3(density * 5.0, 0.0, 0.0);
-    
+    color = colorPressure(convertDensityToPressure(density, uniforms.targetDensity, uniforms.pressureMultiplier));
     
     // Draw Particles
     for (uint i = 0; i < uniforms.particleCount; ++i) {
