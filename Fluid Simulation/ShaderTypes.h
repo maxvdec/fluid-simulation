@@ -27,6 +27,7 @@ typedef struct {
     uint32_t particleCount;
     float deltaTime;
     vector_float3 particleColor;
+    vector_float2 boundingBox;
 } FrameUniforms;
 
 typedef enum BufferIndex {

@@ -190,10 +190,6 @@ struct Vec2Input: View {
     @ViewBuilder
     private func componentField(label: String, value: Binding<Float>) -> some View {
         HStack(spacing: 3) {
-            Text(label)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-                .frame(width: 10)
             FloatInput(
                 value: value,
                 title: label,
@@ -230,10 +226,6 @@ struct Vec3Input: View {
     @ViewBuilder
     private func componentField(label: String, value: Binding<Float>) -> some View {
         HStack(spacing: 3) {
-            Text(label)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-                .frame(width: 10)
             FloatInput(
                 value: value,
                 title: label,
@@ -282,13 +274,49 @@ struct ControlsView: View {
                     get: { properties.particleSize },
                     set: { properties.particleSize = $0 }
                 ),
-                title: "Size"
+                title: "Size",
+                step: 4.0
             )
 
             ColorInput(value: Binding(
                 get: { properties.particleColor },
                 set: { properties.particleColor = $0 }
             ), title: "Color")
+
+            FloatInput(
+                value: Binding(
+                    get: { properties.spacing },
+                    set: { properties.spacing = $0 }
+                ),
+                title: "Spacing",
+                step: 4.0
+            )
+
+            Vec2Input(
+                x: Binding(
+                    get: { properties.spawnArea.x },
+                    set: { properties.spawnArea.x = $0 }
+                ),
+                y: Binding(
+                    get: { properties.spawnArea.y },
+                    set: { properties.spawnArea.y = $0 }
+                ),
+                title: "Spawn Area",
+                step: 10.0
+            )
+            
+            Vec2Input(
+                x: Binding(
+                    get: { properties.boundingBox.x },
+                    set: { properties.boundingBox.x = $0 }
+                ),
+                y: Binding(
+                    get: { properties.boundingBox.y },
+                    set: { properties.boundingBox.y = $0 }
+                ),
+                title: "Bounds",
+                step: 10.0
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal)

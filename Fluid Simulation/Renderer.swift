@@ -28,6 +28,9 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     private var cachedParticleCount: Int = 1
     private var needsParticleLayout = true
+    private var cachedSpawnArea = SIMD2<Float>(repeating: 0)
+    private var cachedSpacing: Float = 0
+    private var cachedParticleSize: Float = 0
 
     override init() {
         guard let device = MTLCreateSystemDefaultDevice(), let commandQueue = device.makeCommandQueue() else { fatalError("Metal unavailable") }
@@ -53,6 +56,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     func buildBuffers() {
+        cachedParticleCount = particleLayoutMetrics().count
+
         let particleStride = MemoryLayout<Particle>.stride
         particleBuffer = device.makeBuffer(length: particleStride * cachedParticleCount, options: .storageModeShared)
 
@@ -70,6 +75,9 @@ final class Renderer: NSObject, MTKViewDelegate {
             particles[i] = Particle(position: .zero, color: .zero)
         }
 
+        cachedSpawnArea = properties.spawnArea
+        cachedSpacing = properties.spacing
+        cachedParticleSize = properties.particleSize
         needsParticleLayout = true
     }
 
@@ -102,9 +110,21 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     func reloadConfig() {
-        if properties.particleCount != cachedParticleCount {
-            cachedParticleCount = properties.particleCount
+        let layoutMetrics = particleLayoutMetrics()
+        let spawnConfigChanged = properties.spawnArea != cachedSpawnArea ||
+            properties.spacing != cachedSpacing ||
+            properties.particleSize != cachedParticleSize
+
+        if layoutMetrics.count != cachedParticleCount {
             buildBuffers()
+            return
+        }
+
+        if spawnConfigChanged {
+            cachedSpawnArea = properties.spawnArea
+            cachedSpacing = properties.spacing
+            cachedParticleSize = properties.particleSize
+            needsParticleLayout = true
         }
     }
 
@@ -135,7 +155,8 @@ final class Renderer: NSObject, MTKViewDelegate {
             pointSize: properties.particleSize,
             particleCount: UInt32(cachedParticleCount),
             deltaTime: dt,
-            particleColor: SIMD3<Float>(Float(properties.particleColor.redComponent), Float(properties.particleColor.greenComponent), Float(properties.particleColor.blueComponent))
+            particleColor: SIMD3<Float>(Float(properties.particleColor.redComponent), Float(properties.particleColor.greenComponent), Float(properties.particleColor.blueComponent)),
+            boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y))
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
@@ -189,27 +210,37 @@ final class Renderer: NSObject, MTKViewDelegate {
             capacity: cachedParticleCount
         )
 
-        let spacing: Float = 10
-        let columns = min(64, cachedParticleCount)
-        let rows = Int(ceil(Float(cachedParticleCount) / Float(columns)))
-        let gridWidth = Float(columns - 1) * spacing
-        let gridHeight = Float(rows - 1) * spacing
-        let origin = SIMD2<Float>(
-            (viewportSize.x - gridWidth) * 0.5,
-            (viewportSize.y - gridHeight) * 0.5
+        let layoutMetrics = particleLayoutMetrics()
+        let diameter = layoutMetrics.radius * 2
+        let occupiedSize = SIMD2<Float>(
+            diameter + Float(layoutMetrics.columns - 1) * layoutMetrics.step,
+            diameter + Float(layoutMetrics.rows - 1) * layoutMetrics.step
         )
+        let origin = viewportSize * 0.5 - occupiedSize * 0.5 + SIMD2<Float>(repeating: layoutMetrics.radius)
 
         for i in 0 ..< cachedParticleCount {
             particles[i] = Particle(
                 position: SIMD2<Float>(
-                    origin.x + Float(i % columns) * spacing,
-                    origin.y + Float(i / columns) * spacing
+                    origin.x + Float(i % layoutMetrics.columns) * layoutMetrics.step,
+                    origin.y + Float(i / layoutMetrics.columns) * layoutMetrics.step
                 ),
                 color: .zero
             )
         }
 
         needsParticleLayout = false
+    }
+
+    func particleLayoutMetrics() -> (count: Int, columns: Int, rows: Int, radius: Float, step: Float) {
+        let radius = max(properties.particleSize * 0.5, 0.5)
+        let step = max(radius * 2 + max(properties.spacing, 0), 1)
+        let spawnArea = SIMD2<Float>(
+            max(properties.spawnArea.x, 0),
+            max(properties.spawnArea.y, 0)
+        )
+        let columns = max(Int(floor(max(spawnArea.x - radius * 2, 0) / step)) + 1, 1)
+        let rows = max(Int(floor(max(spawnArea.y - radius * 2, 0) / step)) + 1, 1)
+        return (columns * rows, columns, rows, radius, step)
     }
 
     func updateRenderTexture(size: SIMD2<Int>) {

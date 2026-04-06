@@ -3,10 +3,29 @@ using namespace metal;
 
 #include "../ShaderTypes.h"
 
-bool circle(float2 center, float2 pixel, float radius) {
+inline bool circle(float2 center, float2 pixel, float radius) {
     float2 d = pixel - center;
     float dist = length(d);
     return dist < radius;
+}
+
+inline bool rectOutline(float2 origin, float2 size, float2 pixel, float w) {
+    float2 minP = origin;
+       float2 maxP = origin + size;
+
+       bool inside =
+           pixel.x >= minP.x && pixel.x < maxP.x &&
+           pixel.y >= minP.y && pixel.y < maxP.y;
+
+       bool border =
+           inside && (
+               pixel.x < minP.x + w ||
+               pixel.x >= maxP.x - w ||
+               pixel.y < minP.y + w ||
+               pixel.y >= maxP.y - w
+           );
+
+       return border;
 }
 
 kernel void renderParticlesToTexture(const device Particle *particles [[buffer(BufferIndexParticles)]],
@@ -20,6 +39,7 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
         return;
     }
     
+    // Draw Particles
     float2 pixel = float2(gid) + 0.5;
     float radius = uniforms.pointSize * 0.5;
     
@@ -31,6 +51,15 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
         if (circle(center, pixel, radius)) {
             color = particles[i].color;
         }
+    }
+        
+    // Draw borders
+    float borderWidth = 3.0;
+    float2 rectSize = uniforms.boundingBox;
+    float2 rectOrigin = float2(width, height) * 0.5 - rectSize * 0.5;
+    
+    if (rectOutline(rectOrigin, rectSize, pixel, borderWidth)) {
+        color = float3(1.0, 1.0, 1.0);
     }
     
     outputTexture.write(float4(color, 1.0), gid);
