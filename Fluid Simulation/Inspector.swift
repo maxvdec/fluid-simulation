@@ -291,6 +291,16 @@ struct ControlsView: View {
                 title: "Spacing",
                 step: 4.0
             )
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.collisionDamping },
+                    set: { properties.collisionDamping = $0 }
+                ),
+                title: "Collision Damping",
+                step: 0.01
+            )
+
 
             Vec2Input(
                 x: Binding(

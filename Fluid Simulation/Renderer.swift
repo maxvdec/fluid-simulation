@@ -158,6 +158,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             particleColor: SIMD3<Float>(Float(properties.particleColor.redComponent), Float(properties.particleColor.greenComponent), Float(properties.particleColor.blueComponent)),
             boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y)),
             isPaused: (!properties.started || properties.isPaused) ? 1 : 0,
+            collisionDamping: properties.collisionDamping
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
@@ -201,32 +202,35 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     func layoutParticles() {
-        guard cachedParticleCount > 0,
-              viewportSize.x > 0,
-              viewportSize.y > 0
-        else { return }
+        guard cachedParticleCount > 0 else { return }
 
         let particles = particleBuffer.contents().bindMemory(
             to: Particle.self,
             capacity: cachedParticleCount
         )
 
-        let layoutMetrics = particleLayoutMetrics()
-        let diameter = layoutMetrics.radius * 2
-        let occupiedSize = SIMD2<Float>(
-            diameter + Float(layoutMetrics.columns - 1) * layoutMetrics.step,
-            diameter + Float(layoutMetrics.rows - 1) * layoutMetrics.step
-        )
-        let origin = viewportSize * 0.5 - occupiedSize * 0.5 + SIMD2<Float>(repeating: layoutMetrics.radius)
+        let layout = particleLayoutMetrics()
+        let diameter = layout.radius * 2
+        let step = layout.step
 
-        for i in 0 ..< cachedParticleCount {
+        let bounds = properties.boundingBox
+
+        let occupiedSize = SIMD2<Float>(
+            diameter + Float(layout.columns - 1) * step,
+            diameter + Float(layout.rows - 1) * step
+        )
+
+        // WORLD SPACE: center at (0,0)
+        let origin = -occupiedSize * 0.5 + SIMD2<Float>(repeating: layout.radius)
+
+        for i in 0..<cachedParticleCount {
             particles[i] = Particle(
                 position: SIMD2<Float>(
-                    origin.x + Float(i % layoutMetrics.columns) * layoutMetrics.step,
-                    origin.y + Float(i / layoutMetrics.columns) * layoutMetrics.step
+                    origin.x + Float(i % layout.columns) * step,
+                    origin.y + Float(i / layout.columns) * step
                 ),
                 velocity: .zero,
-                color: .zero
+                color: SIMD3<Float>(0, 1, 1)
             )
         }
 

@@ -28,8 +28,13 @@ inline bool rectOutline(float2 origin, float2 size, float2 pixel, float w) {
        return border;
 }
 
-float2 translatePosition(float2 position, uint height) {
-    return float2(position.x, height - position.y);
+float2 worldToPixel(float2 world, float2 viewportSize) {
+    float2 center = viewportSize * 0.5;
+
+    return float2(
+        center.x + world.x,
+        center.y - world.y
+    );
 }
 
 kernel void renderParticlesToTexture(const device Particle *particles [[buffer(BufferIndexParticles)]],
@@ -49,8 +54,10 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
     
     float3 color = float3(0.0, 0.0, 0.0);
     
+    float2 viewportSize = float2(width, height);
+    
     for (uint i = 0; i < uniforms.particleCount; ++i) {
-        float2 center = translatePosition(particles[i].position, height);
+        float2 center = worldToPixel(particles[i].position, viewportSize);
         
         if (circle(center, pixel, radius)) {
             color = particles[i].color;

@@ -30,6 +30,7 @@ typedef struct {
     vector_float3 particleColor;
     vector_float2 boundingBox;
     int isPaused;
+    float collisionDamping;
 } FrameUniforms;
 
 typedef enum BufferIndex {

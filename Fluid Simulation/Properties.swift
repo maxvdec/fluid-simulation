@@ -19,4 +19,5 @@ final class Properties {
     var spawnArea: simd_float2 = .init(repeating: 500.0)
     var boundingBox: simd_float2 = .init(2200.0, 1300.0)
     var particleColor: NSColor = .cyan
+    var collisionDamping: Float = 1.0
 }
