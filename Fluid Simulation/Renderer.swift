@@ -22,6 +22,8 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     private var particleBuffer: MTLBuffer!
     private var uniformBuffer: MTLBuffer!
+    private var spatialLookup: MTLBuffer!
+    private var startIndices: MTLBuffer!
     private var renderTexture: MTLTexture!
 
     private var viewportSize = SIMD2<Float>(0, 0)
@@ -71,6 +73,10 @@ final class Renderer: NSObject, MTKViewDelegate {
             length: MemoryLayout<FrameUniforms>.stride,
             options: .storageModeShared
         )
+
+        spatialLookup = device.makeBuffer(length: MemoryLayout<LookoutKey>.stride * cachedParticleCount, options: .storageModeShared)
+        
+        startIndices = device.makeBuffer(length: MemoryLayout<Int32>.stride * cachedParticleCount, options: .storageModeShared)
 
         let particles = particleBuffer.contents().bindMemory(
             to: Particle.self,
@@ -172,6 +178,8 @@ final class Renderer: NSObject, MTKViewDelegate {
             layoutParticles()
         }
 
+        updateCells()
+
         updateRenderTexture(size: drawable.texture.width > 0 && drawable.texture.height > 0
             ? SIMD2<Int>(drawable.texture.width, drawable.texture.height)
             : SIMD2<Int>(Int(viewportSize.x), Int(viewportSize.y)))
@@ -200,6 +208,8 @@ final class Renderer: NSObject, MTKViewDelegate {
             computeEncoder.setComputePipelineState(densitiesComputePipeline)
             computeEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
             computeEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+            computeEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
+            computeEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
 
             let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
             let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
@@ -207,11 +217,12 @@ final class Renderer: NSObject, MTKViewDelegate {
             computeEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
             computeEncoder.endEncoding()
         }
-
         if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.setComputePipelineState(computePipeline)
             computeEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
             computeEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+            computeEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
+            computeEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
 
             let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
             let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
@@ -349,6 +360,69 @@ final class Renderer: NSObject, MTKViewDelegate {
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
         renderTexture = device.makeTexture(descriptor: descriptor)
+    }
+    
+    func hashCell(x: Int, y: Int) -> Int {
+        return (x * 15823) + (y * 973733)
+    }
+    
+    func keyFromHash(_ hash: Int) -> Int {
+        let key = hash % cachedParticleCount
+        return key >= 0 ? key : key + cachedParticleCount
+    }
+
+    func updateCells() {
+        let cellSize = properties.smoothingRadius
+
+        let particles = particleBuffer.contents().bindMemory(
+            to: Particle.self,
+            capacity: cachedParticleCount
+        )
+
+        let spatialLookupMapped = spatialLookup.contents().bindMemory(
+            to: LookoutKey.self,
+            capacity: cachedParticleCount
+        )
+
+        let startIndicesMapped = startIndices.contents().bindMemory(
+            to: Int32.self,
+            capacity: cachedParticleCount
+        )
+
+        var lookupArray = [LookoutKey]()
+        lookupArray.reserveCapacity(cachedParticleCount)
+
+        for i in 0..<cachedParticleCount {
+            let cellX = Int(floor(particles[i].position.x / cellSize))
+            let cellY = Int(floor(particles[i].position.y / cellSize))
+
+            let hash = hashCell(x: cellX, y: cellY)
+            let key = keyFromHash(hash)
+            lookupArray.append(
+                LookoutKey(index: Int32(i), cellKey: Int32(key))
+            )
+
+            startIndicesMapped[i] = -1
+        }
+
+        lookupArray.sort { a, b in
+            if a.cellKey == b.cellKey {
+                return a.index < b.index
+            }
+            return a.cellKey < b.cellKey
+        }
+
+        for i in 0..<cachedParticleCount {
+            spatialLookupMapped[i] = lookupArray[i]
+        }
+        
+        for i in 0..<cachedParticleCount {
+            let key = spatialLookupMapped[i].cellKey
+            let keyPrev = i == 0 ? -1 : spatialLookupMapped[i - 1].cellKey
+            if (key != keyPrev) {
+                startIndicesMapped[Int(key)] = Int32(i)
+            }
+        }
     }
 }
 

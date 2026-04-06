@@ -36,7 +36,9 @@ inline void resolveCollisions(thread Particle &p, constant FrameUniforms &unifor
 }
 
 kernel void calculateDensities(device Particle *particles [[buffer(BufferIndexParticles)]],
-                            constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
+                               constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
+                               const device LookoutKey *spatialLookup [[buffer(BufferIndexLookup)]],
+                               const device int *startIndices [[buffer(BufferIndexStartIndices)]],
                                uint id [[thread_position_in_grid]]) {
     if (id >= uniforms.particleCount) return;
     Particle p = particles[id];
@@ -46,7 +48,7 @@ kernel void calculateDensities(device Particle *particles [[buffer(BufferIndexPa
         return;
     }
     
-    p.density = calculateDensity(p.position, particles, uniforms) * uniforms.densityMultiplier;
+    p.density = calculateDensity(p.position, particles, spatialLookup, startIndices, uniforms) * uniforms.densityMultiplier;
     p.pressure = convertDensityToPressure(p.density, uniforms.targetDensity, uniforms.pressureMultiplier);
     
     particles[id] = p;
@@ -54,6 +56,8 @@ kernel void calculateDensities(device Particle *particles [[buffer(BufferIndexPa
 
 kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParticles)]],
                             constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
+                            const device LookoutKey *spatialLookup [[buffer(BufferIndexLookup)]],
+                            const device int *startIndices [[buffer(BufferIndexStartIndices)]],
                             uint id [[thread_position_in_grid]]) {
     if (id >= uniforms.particleCount) return;
     Particle p = particles[id];
@@ -68,7 +72,7 @@ kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParti
     p.velocity += getGravity(uniforms) * uniforms.deltaTime;
     
     // Pressure force
-    float2 pressureForce = calculatePressureForce(id, particles, uniforms, float2(id, uniforms.deltaTime));
+    float2 pressureForce = calculatePressureForce(id, particles, spatialLookup, startIndices, uniforms, float2(id, uniforms.deltaTime));
     float2 pressureAcceleration = pressureForce / p.density;
     p.velocity += pressureAcceleration * uniforms.deltaTime;
     

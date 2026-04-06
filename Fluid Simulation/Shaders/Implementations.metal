@@ -24,15 +24,35 @@ float smoothingKernelDerivative(float radius, float dst) {
     return (dst - radius) * scale;
 }
 
-float calculateDensity(float2 point, const device Particle *particles, FrameUniforms uniforms) {
+float calculateDensity(float2 point,
+                       const device Particle *particles,
+                       const device LookoutKey *spatialLookup,
+                       const device int *startIndices,
+                       FrameUniforms uniforms) {
     float density = 0;
     float mass = 1;
-    
-    for (uint i = 0; i < uniforms.particleCount; ++i) {
-        Particle p = particles[i];
-        float dst = length(p.position - point);
-        float influence = smoothingKernel(uniforms.smoothingRadius, dst);
-        density += mass * influence;
+
+    float cellSize = uniforms.smoothingRadius;
+    int centerX = int(floor(point.x / cellSize));
+    int centerY = int(floor(point.y / cellSize));
+
+    for (int offsetY = -1; offsetY <= 1; ++offsetY) {
+        for (int offsetX = -1; offsetX <= 1; ++offsetX) {
+            int hash = hashCell(centerX + offsetX, centerY + offsetY);
+            int key = keyFromHash(hash, uniforms.particleCount);
+            int startIndex = startIndices[key];
+            if (startIndex < 0) continue;
+
+            for (int lookupIndex = startIndex; lookupIndex < int(uniforms.particleCount); ++lookupIndex) {
+                LookoutKey entry = spatialLookup[lookupIndex];
+                if (entry.cellKey != key) break;
+
+                Particle p = particles[entry.index];
+                float dst = length(p.position - point);
+                float influence = smoothingKernel(uniforms.smoothingRadius, dst);
+                density += mass * influence;
+            }
+        }
     }
     
     return density;
@@ -43,22 +63,43 @@ float convertDensityToPressure(float density, float targetDensity, float pressur
     return pressureMultiplier * (pow(ratio, 7.0) - 1.0);
 }
 
-float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms, float2 seed) {
+float2 calculatePressureForce(uint particleIndex,
+                              const device Particle *particles,
+                              const device LookoutKey *spatialLookup,
+                              const device int *startIndices,
+                              FrameUniforms uniforms,
+                              float2 seed) {
     float2 pressureForce = float2(0.0);
     Particle thisParticle = particles[particleIndex];
-    
-    for (uint otherIndex = 0; otherIndex < uniforms.particleCount; ++otherIndex) {
-        if (particleIndex == otherIndex) continue;
-        
-        Particle otherParticle = particles[otherIndex];
-        float2 offset = otherParticle.position - thisParticle.position;
-        float dst = length(offset);
-        float2 dir = (dst == 0) ? randomDirection(seed) : offset / dst;
-        float slope = smoothingKernelDerivative(uniforms.smoothingRadius, dst);
-        // mass = 1
-        float density = otherParticle.density;
-        float sharedPressureValue = sharedPressure(density, thisParticle.density, uniforms);
-        pressureForce += sharedPressureValue * dir * slope * 1 / density;
+
+    float cellSize = uniforms.smoothingRadius;
+    int centerX = int(floor(thisParticle.position.x / cellSize));
+    int centerY = int(floor(thisParticle.position.y / cellSize));
+
+    for (int offsetY = -1; offsetY <= 1; ++offsetY) {
+        for (int offsetX = -1; offsetX <= 1; ++offsetX) {
+            int hash = hashCell(centerX + offsetX, centerY + offsetY);
+            int key = keyFromHash(hash, uniforms.particleCount);
+            int startIndex = startIndices[key];
+            if (startIndex < 0) continue;
+
+            for (int lookupIndex = startIndex; lookupIndex < int(uniforms.particleCount); ++lookupIndex) {
+                LookoutKey entry = spatialLookup[lookupIndex];
+                if (entry.cellKey != key) break;
+
+                uint otherIndex = uint(entry.index);
+                if (particleIndex == otherIndex) continue;
+
+                Particle otherParticle = particles[otherIndex];
+                float2 offset = otherParticle.position - thisParticle.position;
+                float dst = length(offset);
+                float2 dir = (dst == 0) ? randomDirection(seed) : offset / dst;
+                float slope = smoothingKernelDerivative(uniforms.smoothingRadius, dst);
+                float density = otherParticle.density;
+                float sharedPressureValue = sharedPressure(density, thisParticle.density, uniforms);
+                pressureForce += sharedPressureValue * dir * slope * 1 / density;
+            }
+        }
     }
     
     return pressureForce;

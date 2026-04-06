@@ -15,11 +15,30 @@ using namespace metal;
 
 constant float PI = 3.14159265358979323846;
 
+inline int hashCell(int x, int y) {
+    return (x * 15823) + (y * 973733);
+}
+
+inline int keyFromHash(int hash, uint particleCount) {
+    int count = max(int(particleCount), 1);
+    int key = hash % count;
+    return key >= 0 ? key : key + count;
+}
+
 float smoothingKernel(float radius, float dst);
 float smoothingKernelDerivative(float radius, float dst);
-float calculateDensity(float2 point, const device Particle *particles, FrameUniforms uniforms);
+float calculateDensity(float2 point,
+                       const device Particle *particles,
+                       const device LookoutKey *spatialLookup,
+                       const device int *startIndices,
+                       FrameUniforms uniforms);
 float convertDensityToPressure(float density, float targetDensity, float pressureMultiplier);
-float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms, float2 seed);
+float2 calculatePressureForce(uint particleIndex,
+                              const device Particle *particles,
+                              const device LookoutKey *spatialLookup,
+                              const device int *startIndices,
+                              FrameUniforms uniforms,
+                              float2 seed);
 
 inline float sharedPressure(float densityA, float densityB, FrameUniforms uniforms) {
     float pressureA = convertDensityToPressure(densityA, uniforms.targetDensity, uniforms.pressureMultiplier);

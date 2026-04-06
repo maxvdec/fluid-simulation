@@ -41,9 +41,16 @@ typedef struct {
     float densityMultiplier;
 } FrameUniforms;
 
+typedef struct {
+    int index;
+    int cellKey;
+} LookoutKey;
+
 typedef enum BufferIndex {
     BufferIndexParticles = 0,
-    BufferIndexUniforms = 1
+    BufferIndexUniforms = 1,
+    BufferIndexLookup = 2,
+    BufferIndexStartIndices = 3,
 } BufferIndex;
 
 typedef enum TextureIndex {
