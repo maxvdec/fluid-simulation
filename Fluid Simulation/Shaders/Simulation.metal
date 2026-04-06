@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#include "../ShaderTypes.h"
+#include "Lib.h"
 
 float2 getGravity(FrameUniforms uniforms) {
     return float2(0.0, -uniforms.gravity);

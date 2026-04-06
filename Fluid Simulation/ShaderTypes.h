@@ -32,6 +32,10 @@ typedef struct {
     int isPaused;
     float collisionDamping;
     int activateCollisions;
+    float smoothingRadius;
+    
+    float pressureMultiplier;
+    float targetDensity;
 } FrameUniforms;
 
 typedef enum BufferIndex {

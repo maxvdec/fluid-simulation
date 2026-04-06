@@ -322,6 +322,37 @@ struct ControlsView: View {
                 title: "Gravity",
                 step: 0.1
             )
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.smoothingRadius },
+                    set: { properties.smoothingRadius = $0 }
+                ),
+                title: "Smoothing Radius",
+                step: 2
+            )
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.pressureMultiplier},
+                    set: { properties.pressureMultiplier = $0 }
+                ),
+                title: "Pressure Multiplier",
+                step: 1,
+                decimals: 2
+            )
+
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.targetDensity },
+                    set: { properties.targetDensity = $0 }
+                ),
+                title: "Target Density",
+                step: 0.001,
+                decimals: 4
+            )
+
 
             Vec2Input(
                 x: Binding(

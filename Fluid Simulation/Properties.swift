@@ -21,6 +21,9 @@ final class Properties {
     var particleColor: NSColor = .cyan
     var collisionDamping: Float = 0.0
     var generateRandomly: Bool = true
-    var particleCount: Int = 1000
+    var particleCount: Int = 400
     var enableCollisions = false
+    var smoothingRadius: Float = 30
+    var targetDensity: Float = 0.005
+    var pressureMultiplier: Float = 10
 }

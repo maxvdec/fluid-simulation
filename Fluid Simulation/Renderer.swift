@@ -166,7 +166,10 @@ final class Renderer: NSObject, MTKViewDelegate {
             boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y)),
             isPaused: (!properties.started || properties.isPaused) ? 1 : 0,
             collisionDamping: properties.collisionDamping,
-            activateCollisions: properties.enableCollisions ? 1 : 0
+            activateCollisions: properties.enableCollisions ? 1 : 0,
+            smoothingRadius: properties.smoothingRadius,
+            pressureMultiplier: properties.pressureMultiplier,
+            targetDensity: properties.targetDensity
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)

@@ -1,7 +1,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#include "../ShaderTypes.h"
+#include "Lib.h"
 
 inline bool circle(float2 center, float2 pixel, float radius) {
     float2 d = pixel - center;
@@ -37,6 +37,27 @@ float2 worldToPixel(float2 world, float2 viewportSize) {
     );
 }
 
+float2 pixelToWorld(float2 pixel, float2 viewportSize) {
+    float2 center = viewportSize * 0.5;
+
+    return float2(
+        pixel.x - center.x,
+        center.y - pixel.y
+    );
+}
+
+float3 colorPressure(float normalizedPressure) {
+    float3 low = float3(0.08, 0.16, 0.38);
+    float3 mid = float3(0.18, 0.9, 1.0);
+    float3 high = float3(1.0, 0.45, 0.1);
+
+    if (normalizedPressure < 0.0) {
+        return mix(mid, low, saturate(-normalizedPressure));
+    }
+
+    return mix(mid, high, saturate(normalizedPressure));
+}
+
 kernel void renderParticlesToTexture(const device Particle *particles [[buffer(BufferIndexParticles)]],
                                      constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
                                      texture2d<float, access::write> outputTexture [[texture(TextureIndexRenderTarget)]],
@@ -48,14 +69,23 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
         return;
     }
     
-    // Draw Particles
+    // Density color
     float2 pixel = float2(gid) + 0.5;
     float radius = uniforms.pointSize * 0.5;
     
     float3 color = float3(0.0, 0.0, 0.0);
     
     float2 viewportSize = float2(width, height);
+    float2 worldPoint = pixelToWorld(pixel, viewportSize);
     
+    float density = calculateDensity(worldPoint, particles, uniforms);
+    float targetDensity = max(uniforms.targetDensity, 1e-5);
+    float densityRatio = density / targetDensity;
+    float signedPressure = (densityRatio - 1.0) * max(uniforms.pressureMultiplier, 1.0) * 0.25;
+    color = colorPressure(tanh(signedPressure));
+    
+    
+    // Draw Particles
     for (uint i = 0; i < uniforms.particleCount; ++i) {
         float2 center = worldToPixel(particles[i].position, viewportSize);
         
