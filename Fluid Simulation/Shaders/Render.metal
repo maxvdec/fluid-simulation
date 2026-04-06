@@ -28,21 +28,20 @@ inline bool rectOutline(float2 origin, float2 size, float2 pixel, float w) {
        return border;
 }
 
-float2 worldToPixel(float2 world, float2 viewportSize) {
+float2 worldToPixel(float2 world, float2 viewportSize, float scale) {
     float2 center = viewportSize * 0.5;
 
     return float2(
-        center.x + world.x,
-        center.y - world.y
+        center.x + world.x * scale,
+        center.y - world.y * scale
     );
 }
 
-float2 pixelToWorld(float2 pixel, float2 viewportSize) {
+float2 pixelToWorld(float2 pixel, float2 viewportSize, float scale) {
     float2 center = viewportSize * 0.5;
-
     return float2(
-        pixel.x - center.x,
-        center.y - pixel.y
+        (pixel.x - center.x) / scale,
+        (center.y - pixel.y) / scale
     );
 }
 
@@ -69,25 +68,30 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
         return;
     }
     
+    float scale = width / 100;
+    
     // Density color
     float2 pixel = float2(gid) + 0.5;
-    float radius = uniforms.pointSize * 0.5;
+    float radius = uniforms.pointSize * 0.5 * scale;
     
     float3 color = float3(0.0, 0.0, 0.0);
     
     float2 viewportSize = float2(width, height);
-    float2 worldPoint = pixelToWorld(pixel, viewportSize);
+    float2 worldPoint = pixelToWorld(pixel, viewportSize, scale);
     
     float density = calculateDensity(worldPoint, particles, uniforms);
+    
+    
     float targetDensity = max(uniforms.targetDensity, 1e-5);
     float densityRatio = density / targetDensity;
     float signedPressure = (densityRatio - 1.0) * max(uniforms.pressureMultiplier, 1.0) * 0.25;
     color = colorPressure(tanh(signedPressure));
+    color = float3(density * 5.0, 0.0, 0.0);
     
     
     // Draw Particles
     for (uint i = 0; i < uniforms.particleCount; ++i) {
-        float2 center = worldToPixel(particles[i].position, viewportSize);
+        float2 center = worldToPixel(particles[i].position, viewportSize, scale);
         
         if (circle(center, pixel, radius)) {
             color = particles[i].color;

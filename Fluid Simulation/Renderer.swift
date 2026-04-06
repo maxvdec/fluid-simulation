@@ -222,8 +222,8 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         if properties.generateRandomly {
             cachedParticleCount = properties.particleCount
-            let bounds = viewportSize
-            let half = bounds * 0.5
+            let scale = viewportSize.x / 100
+            let half = SIMD2<Float>(50.0, viewportSize.y / viewportSize.x * 50.0)
             let radius = properties.particleSize * 0.5
 
             for i in 0 ..< cachedParticleCount {
