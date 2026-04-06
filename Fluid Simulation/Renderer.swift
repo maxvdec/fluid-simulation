@@ -72,7 +72,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         )
 
         for i in 0 ..< cachedParticleCount {
-            particles[i] = Particle(position: .zero, color: .zero)
+            particles[i] = Particle(position: .zero, velocity: .zero, color: .zero)
         }
 
         cachedSpawnArea = properties.spawnArea
@@ -151,12 +151,13 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         var uniforms = FrameUniforms(
             viewportSize: viewportSize,
-            gravity: 0.0,
+            gravity: properties.gravity,
             pointSize: properties.particleSize,
             particleCount: UInt32(cachedParticleCount),
             deltaTime: dt,
             particleColor: SIMD3<Float>(Float(properties.particleColor.redComponent), Float(properties.particleColor.greenComponent), Float(properties.particleColor.blueComponent)),
-            boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y))
+            boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y)),
+            isPaused: (!properties.started || properties.isPaused) ? 1 : 0,
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
@@ -224,6 +225,7 @@ final class Renderer: NSObject, MTKViewDelegate {
                     origin.x + Float(i % layoutMetrics.columns) * layoutMetrics.step,
                     origin.y + Float(i / layoutMetrics.columns) * layoutMetrics.step
                 ),
+                velocity: .zero,
                 color: .zero
             )
         }

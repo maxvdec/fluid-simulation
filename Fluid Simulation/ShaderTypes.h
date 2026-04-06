@@ -17,6 +17,7 @@ using namespace metal;
 
 typedef struct {
     vector_float2 position;
+    vector_float2 velocity;
     vector_float3 color;
 } Particle;
 
@@ -28,6 +29,7 @@ typedef struct {
     float deltaTime;
     vector_float3 particleColor;
     vector_float2 boundingBox;
+    int isPaused;
 } FrameUniforms;
 
 typedef enum BufferIndex {

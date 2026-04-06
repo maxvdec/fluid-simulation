@@ -14,6 +14,7 @@ final class Properties {
     var started: Bool = false
 
     var particleSize: Float = 30.0
+    var gravity: Float = 2000
     var spacing: Float = 6.0
     var spawnArea: simd_float2 = .init(repeating: 500.0)
     var boundingBox: simd_float2 = .init(2200.0, 1300.0)
