@@ -77,7 +77,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         )
 
         for i in 0 ..< cachedParticleCount {
-            particles[i] = Particle(position: .zero, velocity: .zero, color: .zero)
+            particles[i] = Particle(position: .zero, velocity: .zero, density: .zero, pressure: .zero, color: .zero)
         }
 
         cachedSpawnArea = properties.spawnArea
@@ -234,6 +234,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                 particles[i] = Particle(
                     position: SIMD2<Float>(x, y),
                     velocity: .zero,
+                    density: .zero,
+                    pressure: .zero,
                     color: SIMD3<Float>(0, 1, 1)
                 )
             }
@@ -260,6 +262,8 @@ final class Renderer: NSObject, MTKViewDelegate {
                         origin.y + Float(i / layout.columns) * step
                     ),
                     velocity: .zero,
+                    density: .zero,
+                    pressure: .zero,
                     color: SIMD3<Float>(0, 1, 1)
                 )
             }

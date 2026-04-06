@@ -47,6 +47,9 @@ kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParti
         return;
     }
     
+    p.density = calculateDensity(p.position, particles, uniforms) * uniforms.densityMultiplier;
+    p.pressure = convertDensityToPressure(p.density, uniforms.targetDensity, uniforms.pressureMultiplier);
+    
     p.velocity += getGravity(uniforms) * uniforms.deltaTime;
     p.position += p.velocity * uniforms.deltaTime;
     

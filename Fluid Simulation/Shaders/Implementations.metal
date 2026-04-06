@@ -16,6 +16,13 @@ float smoothingKernel(float radius, float dst) {
     return pow(value, 3) / volume;
 }
 
+float smoothingKernelDerivative(float radius, float dst) {
+    if (dst >= radius) return 0;
+    float f = pow(radius, 2) - pow(dst, 2);
+    float scale = -24 / (PI * pow(radius, 8));
+    return scale * dst * pow(f, 2);
+}
+
 float calculateDensity(float2 point, const device Particle *particles, FrameUniforms uniforms) {
     float density = 0;
     float mass = 1;

@@ -18,6 +18,8 @@ using namespace metal;
 typedef struct {
     vector_float2 position;
     vector_float2 velocity;
+    float density;
+    float pressure;
     vector_float3 color;
 } Particle;
 
