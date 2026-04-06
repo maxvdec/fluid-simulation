@@ -162,7 +162,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         else { return }
 
         let now = CACurrentMediaTime()
-        let dt = Float(now - lastTime)
+        var dt = Float(now - lastTime)
+        dt = 1 / 120
         lastTime = now
 
         viewportSize = SIMD2(Float(view.drawableSize.width), Float(view.drawableSize.height))

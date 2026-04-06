@@ -293,7 +293,7 @@ struct ControlsView: View {
                     set: { properties.particleSize = $0 }
                 ),
                 title: "Size",
-                step: 4.0
+                step: 0.1
             )
 
             ColorInput(value: Binding(
@@ -307,7 +307,7 @@ struct ControlsView: View {
                     set: { properties.spacing = $0 }
                 ),
                 title: "Spacing",
-                step: 4.0
+                step: 0.1
             )
             
             FloatInput(

@@ -13,7 +13,7 @@ final class Properties {
     var isPaused: Bool = true
     var started: Bool = false
 
-    var particleSize: Float = 1.0
+    var particleSize: Float = 0.6
     var gravity: Float = 0
     var spacing: Float = 0.3
     var spawnArea: simd_float2 = .init(repeating: 20.0)
@@ -25,6 +25,6 @@ final class Properties {
     var enableCollisions = true
     var smoothingRadius: Float = 5.0
     var targetDensity: Float = 2.5
-    var pressureMultiplier: Float = 50
+    var pressureMultiplier: Float = 0.2
     var densityMultiplier: Float = 1
 }

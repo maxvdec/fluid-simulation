@@ -11,16 +11,17 @@ using namespace metal;
 #include "Lib.h"
 
 float smoothingKernel(float radius, float dst) {
-    float volume = PI * pow(radius, 8) / 4;
-    float value = max(0.0, pow(radius, 2) - pow(dst, 2));
-    return pow(value, 3) / volume;
+    if (dst >= radius) return 0;
+    
+    float volume = PI * pow(radius, 4) / 6;
+    return (radius - dst) * (radius - dst) / volume;
 }
 
 float smoothingKernelDerivative(float radius, float dst) {
     if (dst >= radius) return 0;
-    float f = pow(radius, 2) - pow(dst, 2);
-    float scale = -24 / (PI * pow(radius, 8));
-    return scale * dst * pow(f, 2);
+    
+    float scale = 12 / (PI * pow(radius, 4));
+    return (dst - radius) * scale;
 }
 
 float calculateDensity(float2 point, const device Particle *particles, FrameUniforms uniforms) {
@@ -38,9 +39,8 @@ float calculateDensity(float2 point, const device Particle *particles, FrameUnif
 }
 
 float convertDensityToPressure(float density, float targetDensity, float pressureMultiplier) {
-    float densityError = density - targetDensity;
-    float pressure = densityError * pressureMultiplier;
-    return pressure;
+    float ratio = density / targetDensity;
+    return pressureMultiplier * (pow(ratio, 7.0) - 1.0); 
 }
 
 float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms, float2 seed) {
