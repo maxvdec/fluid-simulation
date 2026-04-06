@@ -17,6 +17,7 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     private var computePipeline: MTLComputePipelineState!
     private var renderComputePipeline: MTLComputePipelineState!
+    private var densitiesComputePipeline: MTLComputePipelineState!
     private var renderPipeline: MTLRenderPipelineState!
 
     private var particleBuffer: MTLBuffer!
@@ -102,6 +103,8 @@ final class Renderer: NSObject, MTKViewDelegate {
             computePipeline = try device.makeComputePipelineState(function: computeFunction)
             let renderComputeFunction = library.makeFunction(name: "renderParticlesToTexture")!
             renderComputePipeline = try device.makeComputePipelineState(function: renderComputeFunction)
+            let densityComputeFunction = library.makeFunction(name: "calculateDensities")!
+            densitiesComputePipeline = try device.makeComputePipelineState(function: densityComputeFunction)
 
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = library.makeFunction(name: "renderVertex")
@@ -179,7 +182,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             pointSize: properties.particleSize,
             particleCount: UInt32(cachedParticleCount),
             deltaTime: dt,
-            particleColor: SIMD3<Float>(Float(properties.particleColor.redComponent), Float(properties.particleColor.greenComponent), Float(properties.particleColor.blueComponent)),
+            particleColor: SIMD3<Float>(Float(properties.particleColor.usingColorSpace(.sRGB)!.redComponent), Float(properties.particleColor.usingColorSpace(.sRGB)!.greenComponent), Float(properties.particleColor.usingColorSpace(.sRGB)!.blueComponent)),
             boundingBox: SIMD2<Float>(Float(properties.boundingBox.x), Float(properties.boundingBox.y)),
             isPaused: (!properties.started || properties.isPaused) ? 1 : 0,
             collisionDamping: properties.collisionDamping,
@@ -191,6 +194,18 @@ final class Renderer: NSObject, MTKViewDelegate {
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
+
+        if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            computeEncoder.setComputePipelineState(densitiesComputePipeline)
+            computeEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
+            computeEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+
+            let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
+            let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
+
+            computeEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
+            computeEncoder.endEncoding()
+        }
 
         if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.setComputePipelineState(computePipeline)
@@ -240,13 +255,13 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         if properties.generateRandomly {
             cachedParticleCount = properties.particleCount
-            let scale = viewportSize.x / 100
-            let half = SIMD2<Float>(50.0, viewportSize.y / viewportSize.x * 50.0)
+            let spawnHalfX = properties.boundingBox.x * 0.5
+            let spawnHalfY = properties.boundingBox.y * 0.5
             let radius = properties.particleSize * 0.5
 
             for i in 0 ..< cachedParticleCount {
-                let x = Float.random(in: (-half.x + radius)...(half.x - radius))
-                let y = Float.random(in: (-half.y + radius)...(half.y - radius))
+                let x = Float.random(in: (-spawnHalfX + radius)...(spawnHalfX - radius))
+                let y = Float.random(in: (-spawnHalfY + radius)...(spawnHalfY - radius))
 
                 particles[i] = Particle(
                     position: SIMD2<Float>(x, y),
@@ -261,8 +276,6 @@ final class Renderer: NSObject, MTKViewDelegate {
             let layout = particleLayoutMetrics()
             let diameter = layout.radius * 2
             let step = layout.step
-
-            let bounds = properties.boundingBox
 
             let occupiedSize = SIMD2<Float>(
                 diameter + Float(layout.columns - 1) * step,
@@ -287,7 +300,7 @@ final class Renderer: NSObject, MTKViewDelegate {
 
             needsParticleLayout = false
         }
-        
+
         var totalDensity: Float = 0
         let sampleCount = min(10, cachedParticleCount)
         for i in 0 ..< sampleCount {
@@ -297,7 +310,7 @@ final class Renderer: NSObject, MTKViewDelegate {
                 let dst = simd_length(particles[j].position - point)
                 let r = properties.smoothingRadius
                 if dst < r {
-                    let value = max(0, r*r - dst*dst)
+                    let value = max(0, r * r - dst * dst)
                     let volume = Float.pi * pow(r, 8) / 4
                     density += pow(value, 3) / volume
                 }

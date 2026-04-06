@@ -35,6 +35,23 @@ inline void resolveCollisions(thread Particle &p, constant FrameUniforms &unifor
     }
 }
 
+kernel void calculateDensities(device Particle *particles [[buffer(BufferIndexParticles)]],
+                            constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
+                               uint id [[thread_position_in_grid]]) {
+    if (id >= uniforms.particleCount) return;
+    Particle p = particles[id];
+    
+    if (uniforms.isPaused) {
+        particles[id] = p;
+        return;
+    }
+    
+    p.density = calculateDensity(p.position, particles, uniforms) * uniforms.densityMultiplier;
+    p.pressure = convertDensityToPressure(p.density, uniforms.targetDensity, uniforms.pressureMultiplier);
+    
+    particles[id] = p;
+}
+
 kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParticles)]],
                             constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
                             uint id [[thread_position_in_grid]]) {
@@ -47,14 +64,11 @@ kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParti
         return;
     }
     
-    p.density = calculateDensity(p.position, particles, uniforms) * uniforms.densityMultiplier;
-    p.pressure = convertDensityToPressure(p.density, uniforms.targetDensity, uniforms.pressureMultiplier);
-    
     // Gravity
     p.velocity += getGravity(uniforms) * uniforms.deltaTime;
     
     // Pressure force
-    float2 pressureForce = calculatePressureForce(id, particles, uniforms);
+    float2 pressureForce = calculatePressureForce(id, particles, uniforms, float2(id, uniforms.deltaTime));
     float2 pressureAcceleration = pressureForce / p.density;
     p.velocity += pressureAcceleration * uniforms.deltaTime;
     

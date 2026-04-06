@@ -45,16 +45,45 @@ float2 pixelToWorld(float2 pixel, float2 viewportSize, float scale) {
     );
 }
 
-float3 colorPressure(float normalizedPressure) {
-    float3 low = float3(0.08, 0.16, 0.38);
-    float3 mid = float3(0.18, 0.9, 1.0);
-    float3 high = float3(1.0, 0.45, 0.1);
+float3 colorFromPressureField(float pressure) {
+    float visualRange = 1.0; // tune this
+    float p = clamp(pressure / visualRange, -1.0, 1.0);
 
-    if (normalizedPressure < 0.0) {
-        return mix(mid, low, saturate(-normalizedPressure));
+    if (p < 0.0) {
+        return mix(float3(1.0), float3(0.0, 0.2, 1.0), -p);
+    } else {
+        return mix(float3(1.0), float3(1.0, 0.0, 0.0), p);
+    }
+}
+
+inline float smoothFieldKernel(float r, float h) {
+    if (r >= h) return 0.0;
+
+    float q = r / h;
+    float x = 1.0 - q * q;
+    return x * x * x;
+}
+
+float samplePressureAroundPixel(float2 worldPoint,
+                                const device Particle *particles,
+                                constant FrameUniforms &uniforms) {
+    float weightedSum = 0.0;
+    float weightSum = 0.0;
+
+    float h = uniforms.smoothingRadius * 1.5;
+
+    for (uint i = 0; i < uniforms.particleCount; ++i) {
+        float2 d = worldPoint - particles[i].position;
+        float r = length(d);
+
+        if (r < h) {
+            float w = smoothFieldKernel(r, h);
+            weightedSum += particles[i].pressure * w;
+            weightSum += w;
+        }
     }
 
-    return mix(mid, high, saturate(normalizedPressure));
+    return (weightSum > 0.0) ? (weightedSum / weightSum) : 0.0;
 }
 
 kernel void renderParticlesToTexture(const device Particle *particles [[buffer(BufferIndexParticles)]],
@@ -68,22 +97,39 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
         return;
     }
     
-    float scale = width / 100;
-    
-    // Density color
+    float scale = width / 100.0;
     float2 pixel = float2(gid) + 0.5;
-    float radius = uniforms.pointSize * 0.5 * scale;
+    float2 viewportSize = float2(width, height);
+
+    // If collisions are enabled, paint everything outside the bounding box black.
+    if (uniforms.activateCollisions == 1) {
+        float2 halfBox = uniforms.boundingBox * 0.5;
+        float2 topLeft     = worldToPixel(float2(-halfBox.x,  halfBox.y), viewportSize, scale);
+        float2 bottomRight = worldToPixel(float2( halfBox.x, -halfBox.y), viewportSize, scale);
+
+        float minX = min(topLeft.x, bottomRight.x);
+        float maxX = max(topLeft.x, bottomRight.x);
+        float minY = min(topLeft.y, bottomRight.y);
+        float maxY = max(topLeft.y, bottomRight.y);
+
+        bool insideBox =
+            pixel.x >= minX && pixel.x <= maxX &&
+            pixel.y >= minY && pixel.y <= maxY;
+
+        if (!insideBox) {
+            outputTexture.write(float4(0.0, 0.0, 0.0, 1.0), gid);
+            return;
+        }
+    }
     
+    float radius = uniforms.pointSize * 0.5 * scale;
     float3 color = float3(0.0, 0.0, 0.0);
     
-    float2 viewportSize = float2(width, height);
     float2 worldPoint = pixelToWorld(pixel, viewportSize, scale);
+    float pressureField = samplePressureAroundPixel(worldPoint, particles, uniforms);
+    color = colorFromPressureField(pressureField);
     
-    float density = calculateDensity(worldPoint, particles, uniforms) * uniforms.densityMultiplier;
-    
-    color = colorPressure(convertDensityToPressure(density, uniforms.targetDensity, uniforms.pressureMultiplier));
-    
-    // Draw Particles
+    // Draw particles
     for (uint i = 0; i < uniforms.particleCount; ++i) {
         float2 center = worldToPixel(particles[i].position, viewportSize, scale);
         
@@ -93,10 +139,14 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
     }
     
     if (uniforms.activateCollisions == 1) {
-        // Draw borders
         float borderWidth = 3.0;
-        float2 rectSize = uniforms.boundingBox;
-        float2 rectOrigin = float2(width, height) * 0.5 - rectSize * 0.5;
+        
+        float2 halfBox = uniforms.boundingBox * 0.5;
+        float2 topLeft     = worldToPixel(float2(-halfBox.x,  halfBox.y), viewportSize, scale);
+        float2 bottomRight = worldToPixel(float2( halfBox.x, -halfBox.y), viewportSize, scale);
+        
+        float2 rectOrigin = topLeft;
+        float2 rectSize   = bottomRight - topLeft;
         
         if (rectOutline(rectOrigin, rectSize, pixel, borderWidth)) {
             color = float3(1.0, 1.0, 1.0);

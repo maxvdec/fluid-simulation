@@ -17,12 +17,12 @@ final class Properties {
     var gravity: Float = 0
     var spacing: Float = 0.3
     var spawnArea: simd_float2 = .init(repeating: 20.0)
-    var boundingBox: simd_float2 = .init(100.0, 60.0)
-    var particleColor: NSColor = .cyan
+    var boundingBox: simd_float2 = .init(90.0, 60.0)
+    var particleColor: NSColor = .darkGray
     var collisionDamping: Float = 0.0
     var generateRandomly: Bool = true
     var particleCount: Int = 400
-    var enableCollisions = false
+    var enableCollisions = true
     var smoothingRadius: Float = 5.0
     var targetDensity: Float = 2.5
     var pressureMultiplier: Float = 50
