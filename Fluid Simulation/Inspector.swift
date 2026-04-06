@@ -343,7 +343,7 @@ struct ControlsView: View {
                     set: { properties.pressureMultiplier = $0 }
                 ),
                 title: "Pressure Multiplier",
-                step: 1,
+                step: 0.1,
                 decimals: 2
             )
 
@@ -364,8 +364,38 @@ struct ControlsView: View {
                     set: { properties.densityMultiplier = $0 }
                 ),
                 title: "Density Multiplier",
-                step: 2,
+                step: 0.1,
                 decimals: 4
+            )
+
+            FloatInput(
+                value: Binding(
+                    get: { properties.constraintRelaxation },
+                    set: { properties.constraintRelaxation = $0 }
+                ),
+                title: "Constraint Relaxation",
+                step: 1,
+                decimals: 2
+            )
+
+            FloatInput(
+                value: Binding(
+                    get: { properties.artificialPressureStrength },
+                    set: { properties.artificialPressureStrength = $0 }
+                ),
+                title: "Artificial Pressure",
+                step: 0.0001,
+                decimals: 4
+            )
+
+            IntInput(
+                value: Binding(
+                    get: { properties.pressureIterations },
+                    set: { properties.pressureIterations = $0 }
+                ),
+                title: "Pressure Iterations",
+                step: 1,
+                range: 1 ... 20
             )
 
 

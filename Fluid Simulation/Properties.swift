@@ -25,6 +25,9 @@ final class Properties {
     var enableCollisions = true
     var smoothingRadius: Float = 5.0
     var targetDensity: Float = 2.5
-    var pressureMultiplier: Float = 0.2
+    var pressureMultiplier: Float = 1.0
     var densityMultiplier: Float = 1
+    var pressureIterations: Int = 5
+    var constraintRelaxation: Float = 50
+    var artificialPressureStrength: Float = 0.001
 }

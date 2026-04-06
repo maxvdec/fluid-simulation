@@ -17,9 +17,11 @@ using namespace metal;
 
 typedef struct {
     vector_float2 position;
+    vector_float2 predictedPosition;
     vector_float2 velocity;
     float density;
     float pressure;
+    float padding;
     vector_float3 color;
 } Particle;
 
@@ -39,6 +41,8 @@ typedef struct {
     float pressureMultiplier;
     float targetDensity;
     float densityMultiplier;
+    float constraintRelaxation;
+    float artificialPressureStrength;
 } FrameUniforms;
 
 typedef struct {
@@ -51,6 +55,7 @@ typedef enum BufferIndex {
     BufferIndexUniforms = 1,
     BufferIndexLookup = 2,
     BufferIndexStartIndices = 3,
+    BufferIndexPositionDeltas = 4,
 } BufferIndex;
 
 typedef enum TextureIndex {

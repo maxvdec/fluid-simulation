@@ -32,19 +32,21 @@ float calculateDensity(float2 point,
                        const device LookoutKey *spatialLookup,
                        const device int *startIndices,
                        FrameUniforms uniforms);
+float2 smoothingKernelGradient(float2 offset, float radius, float2 seed);
 float convertDensityToPressure(float density, float targetDensity, float pressureMultiplier);
-float2 calculatePressureForce(uint particleIndex,
+float calculateLambda(uint particleIndex,
+                      const device Particle *particles,
+                      const device LookoutKey *spatialLookup,
+                      const device int *startIndices,
+                      FrameUniforms uniforms,
+                      float2 seed);
+float2 calculatePositionDelta(uint particleIndex,
                               const device Particle *particles,
                               const device LookoutKey *spatialLookup,
                               const device int *startIndices,
                               FrameUniforms uniforms,
                               float2 seed);
-
-inline float sharedPressure(float densityA, float densityB, FrameUniforms uniforms) {
-    float pressureA = convertDensityToPressure(densityA, uniforms.targetDensity, uniforms.pressureMultiplier);
-    float pressureB = convertDensityToPressure(densityB, uniforms.targetDensity, uniforms.pressureMultiplier);
-    return (pressureA + pressureB) / 2;
-}
+float artificialPressure(float distance, FrameUniforms uniforms);
 
 inline float rand(float2 co) {
     return fract(sin(dot(co, float2(12.9898, 78.233))) * 43758.5453);

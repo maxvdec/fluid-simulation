@@ -16,6 +16,8 @@ final class Renderer: NSObject, MTKViewDelegate {
     private let commandQueue: MTLCommandQueue
 
     private var computePipeline: MTLComputePipelineState!
+    private var constraintComputePipeline: MTLComputePipelineState!
+    private var applyConstraintComputePipeline: MTLComputePipelineState!
     private var renderComputePipeline: MTLComputePipelineState!
     private var densitiesComputePipeline: MTLComputePipelineState!
     private var renderPipeline: MTLRenderPipelineState!
@@ -24,6 +26,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     private var uniformBuffer: MTLBuffer!
     private var spatialLookup: MTLBuffer!
     private var startIndices: MTLBuffer!
+    private var positionDeltaBuffer: MTLBuffer!
     private var renderTexture: MTLTexture!
 
     private var viewportSize = SIMD2<Float>(0, 0)
@@ -35,6 +38,9 @@ final class Renderer: NSObject, MTKViewDelegate {
     private var cachedSpacing: Float = 0
     private var cachedParticleSize: Float = 0
     private var cachedGenerateRandomly: Bool = false
+    private var cachedSmoothingRadius: Float = 0
+    private var cachedDensityMultiplier: Float = 0
+    private var needsDensityCalibration = true
 
     override init() {
         guard let device = MTLCreateSystemDefaultDevice(), let commandQueue = device.makeCommandQueue() else { fatalError("Metal unavailable") }
@@ -77,6 +83,7 @@ final class Renderer: NSObject, MTKViewDelegate {
         spatialLookup = device.makeBuffer(length: MemoryLayout<LookoutKey>.stride * cachedParticleCount, options: .storageModeShared)
         
         startIndices = device.makeBuffer(length: MemoryLayout<Int32>.stride * cachedParticleCount, options: .storageModeShared)
+        positionDeltaBuffer = device.makeBuffer(length: MemoryLayout<SIMD2<Float>>.stride * cachedParticleCount, options: .storageModeShared)
 
         let particles = particleBuffer.contents().bindMemory(
             to: Particle.self,
@@ -84,14 +91,17 @@ final class Renderer: NSObject, MTKViewDelegate {
         )
 
         for i in 0 ..< cachedParticleCount {
-            particles[i] = Particle(position: .zero, velocity: .zero, density: .zero, pressure: .zero, color: .zero)
+            particles[i] = Particle(position: .zero, predictedPosition: .zero, velocity: .zero, density: .zero, pressure: .zero, padding: .zero, color: .zero)
         }
 
         cachedSpawnArea = properties.spawnArea
         cachedSpacing = properties.spacing
         cachedParticleSize = properties.particleSize
         cachedGenerateRandomly = properties.generateRandomly
+        cachedSmoothingRadius = properties.smoothingRadius
+        cachedDensityMultiplier = properties.densityMultiplier
         needsParticleLayout = true
+        needsDensityCalibration = true
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -107,6 +117,10 @@ final class Renderer: NSObject, MTKViewDelegate {
         do {
             let computeFunction = library.makeFunction(name: "updateParticles")!
             computePipeline = try device.makeComputePipelineState(function: computeFunction)
+            let constraintFunction = library.makeFunction(name: "solveDensityConstraints")!
+            constraintComputePipeline = try device.makeComputePipelineState(function: constraintFunction)
+            let applyConstraintFunction = library.makeFunction(name: "applyDensityConstraints")!
+            applyConstraintComputePipeline = try device.makeComputePipelineState(function: applyConstraintFunction)
             let renderComputeFunction = library.makeFunction(name: "renderParticlesToTexture")!
             renderComputePipeline = try device.makeComputePipelineState(function: renderComputeFunction)
             let densityComputeFunction = library.makeFunction(name: "calculateDensities")!
@@ -126,11 +140,14 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     func reloadConfig() {
         let layoutMetrics = particleLayoutMetrics()
+        let expectedParticleCount = properties.generateRandomly ? properties.particleCount : layoutMetrics.count
+        let densityConfigChanged = properties.smoothingRadius != cachedSmoothingRadius ||
+            properties.densityMultiplier != cachedDensityMultiplier
         let spawnConfigChanged = properties.spawnArea != cachedSpawnArea ||
             properties.spacing != cachedSpacing ||
             properties.particleSize != cachedParticleSize || properties.generateRandomly != cachedGenerateRandomly
 
-        if layoutMetrics.count != cachedParticleCount {
+        if expectedParticleCount != cachedParticleCount {
             buildBuffers()
             return
         }
@@ -141,6 +158,12 @@ final class Renderer: NSObject, MTKViewDelegate {
             cachedParticleSize = properties.particleSize
             cachedGenerateRandomly = properties.generateRandomly
             needsParticleLayout = true
+        }
+
+        if densityConfigChanged {
+            cachedSmoothingRadius = properties.smoothingRadius
+            cachedDensityMultiplier = properties.densityMultiplier
+            needsDensityCalibration = true
         }
     }
 
@@ -178,7 +201,9 @@ final class Renderer: NSObject, MTKViewDelegate {
             layoutParticles()
         }
 
-        updateCells()
+        if needsDensityCalibration {
+            calibrateTargetDensity()
+        }
 
         updateRenderTexture(size: drawable.texture.width > 0 && drawable.texture.height > 0
             ? SIMD2<Int>(drawable.texture.width, drawable.texture.height)
@@ -199,30 +224,72 @@ final class Renderer: NSObject, MTKViewDelegate {
             smoothingRadius: properties.smoothingRadius,
             pressureMultiplier: properties.pressureMultiplier,
             targetDensity: properties.targetDensity,
-            densityMultiplier: properties.densityMultiplier
+            densityMultiplier: properties.densityMultiplier,
+            constraintRelaxation: properties.constraintRelaxation,
+            artificialPressureStrength: properties.artificialPressureStrength
         )
 
         memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<FrameUniforms>.stride)
 
-        if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
-            computeEncoder.setComputePipelineState(densitiesComputePipeline)
-            computeEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
-            computeEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
-            computeEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
-            computeEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
+        if properties.started && !properties.isPaused {
+            preparePredictedParticles(deltaTime: dt)
 
-            let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
-            let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
+            for _ in 0 ..< max(properties.pressureIterations, 1) {
+                updateCells()
 
-            computeEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
-            computeEncoder.endEncoding()
+                guard let solverCommandBuffer = commandQueue.makeCommandBuffer() else { return }
+
+                if let densityEncoder = solverCommandBuffer.makeComputeCommandEncoder() {
+                    densityEncoder.setComputePipelineState(densitiesComputePipeline)
+                    densityEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
+                    densityEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+                    densityEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
+                    densityEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
+
+                    let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
+                    let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
+
+                    densityEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
+                    densityEncoder.endEncoding()
+                }
+
+                if let constraintEncoder = solverCommandBuffer.makeComputeCommandEncoder() {
+                    constraintEncoder.setComputePipelineState(constraintComputePipeline)
+                    constraintEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
+                    constraintEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+                    constraintEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
+                    constraintEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
+                    constraintEncoder.setBuffer(positionDeltaBuffer, offset: 0, index: Int(BufferIndexPositionDeltas.rawValue))
+
+                    let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
+                    let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
+
+                    constraintEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
+                    constraintEncoder.endEncoding()
+                }
+
+                if let applyConstraintEncoder = solverCommandBuffer.makeComputeCommandEncoder() {
+                    applyConstraintEncoder.setComputePipelineState(applyConstraintComputePipeline)
+                    applyConstraintEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
+                    applyConstraintEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
+                    applyConstraintEncoder.setBuffer(positionDeltaBuffer, offset: 0, index: Int(BufferIndexPositionDeltas.rawValue))
+
+                    let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
+                    let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
+
+                    applyConstraintEncoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerGroup)
+                    applyConstraintEncoder.endEncoding()
+                }
+
+                solverCommandBuffer.commit()
+                solverCommandBuffer.waitUntilCompleted()
+            }
         }
+
         if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.setComputePipelineState(computePipeline)
             computeEncoder.setBuffer(particleBuffer, offset: 0, index: Int(BufferIndexParticles.rawValue))
             computeEncoder.setBuffer(uniformBuffer, offset: 0, index: Int(BufferIndexUniforms.rawValue))
-            computeEncoder.setBuffer(spatialLookup, offset: 0, index: Int(BufferIndexLookup.rawValue))
-            computeEncoder.setBuffer(startIndices, offset: 0, index: Int(BufferIndexStartIndices.rawValue))
 
             let threadsPerGroup = MTLSize(width: 64, height: 1, depth: 1)
             let threadsPerGrid = MTLSize(width: cachedParticleCount, height: 1, depth: 1)
@@ -277,9 +344,11 @@ final class Renderer: NSObject, MTKViewDelegate {
 
                 particles[i] = Particle(
                     position: SIMD2<Float>(x, y),
+                    predictedPosition: SIMD2<Float>(x, y),
                     velocity: .zero,
                     density: .zero,
                     pressure: .zero,
+                    padding: .zero,
                     color: SIMD3<Float>(0, 1, 1)
                 )
             }
@@ -303,9 +372,14 @@ final class Renderer: NSObject, MTKViewDelegate {
                         origin.x + Float(i % layout.columns) * step,
                         origin.y + Float(i / layout.columns) * step
                     ),
+                    predictedPosition: SIMD2<Float>(
+                        origin.x + Float(i % layout.columns) * step,
+                        origin.y + Float(i / layout.columns) * step
+                    ),
                     velocity: .zero,
                     density: .zero,
                     pressure: .zero,
+                    padding: .zero,
                     color: SIMD3<Float>(0, 1, 1)
                 )
             }
@@ -313,23 +387,7 @@ final class Renderer: NSObject, MTKViewDelegate {
             needsParticleLayout = false
         }
 
-        var totalDensity: Float = 0
-        let sampleCount = min(10, cachedParticleCount)
-        for i in 0 ..< sampleCount {
-            var density: Float = 0
-            let point = particles[i].position
-            for j in 0 ..< cachedParticleCount {
-                let dst = simd_length(particles[j].position - point)
-                let r = properties.smoothingRadius
-                if dst < r {
-                    let value = max(0, r * r - dst * dst)
-                    let volume = Float.pi * pow(r, 8) / 4
-                    density += pow(value, 3) / volume
-                }
-            }
-            totalDensity += density
-        }
-        properties.targetDensity = totalDensity / Float(sampleCount)
+        calibrateTargetDensity()
     }
 
     func particleLayoutMetrics() -> (count: Int, columns: Int, rows: Int, radius: Float, step: Float) {
@@ -372,7 +430,7 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     func updateCells() {
-        let cellSize = properties.smoothingRadius
+        let cellSize = max(properties.smoothingRadius, 0.0001)
 
         let particles = particleBuffer.contents().bindMemory(
             to: Particle.self,
@@ -393,8 +451,8 @@ final class Renderer: NSObject, MTKViewDelegate {
         lookupArray.reserveCapacity(cachedParticleCount)
 
         for i in 0..<cachedParticleCount {
-            let cellX = Int(floor(particles[i].position.x / cellSize))
-            let cellY = Int(floor(particles[i].position.y / cellSize))
+            let cellX = Int(floor(particles[i].predictedPosition.x / cellSize))
+            let cellY = Int(floor(particles[i].predictedPosition.y / cellSize))
 
             let hash = hashCell(x: cellX, y: cellY)
             let key = keyFromHash(hash)
@@ -422,6 +480,50 @@ final class Renderer: NSObject, MTKViewDelegate {
             if (key != keyPrev) {
                 startIndicesMapped[Int(key)] = Int32(i)
             }
+        }
+    }
+
+    func calibrateTargetDensity() {
+        let particles = particleBuffer.contents().bindMemory(
+            to: Particle.self,
+            capacity: cachedParticleCount
+        )
+
+        var totalDensity: Float = 0
+        let sampleCount = min(10, cachedParticleCount)
+        guard sampleCount > 0 else { return }
+
+        for i in 0 ..< sampleCount {
+            var density: Float = 0
+            let point = particles[i].position
+            for j in 0 ..< cachedParticleCount {
+                let dst = simd_length(particles[j].position - point)
+                let r = max(properties.smoothingRadius, 0.0001)
+                if dst < r {
+                    let volume = Float.pi * pow(r, 4) / 6
+                    density += pow(r - dst, 2) / volume
+                }
+            }
+            totalDensity += density
+        }
+
+        properties.targetDensity = totalDensity / Float(sampleCount) * properties.densityMultiplier
+        needsDensityCalibration = false
+    }
+
+    func preparePredictedParticles(deltaTime: Float) {
+        let particles = particleBuffer.contents().bindMemory(
+            to: Particle.self,
+            capacity: cachedParticleCount
+        )
+
+        let gravity = SIMD2<Float>(0, -properties.gravity)
+
+        for i in 0 ..< cachedParticleCount {
+            particles[i].velocity += gravity * deltaTime
+            particles[i].predictedPosition = particles[i].position + particles[i].velocity * deltaTime
+            particles[i].density = 0
+            particles[i].pressure = 0
         }
     }
 }
