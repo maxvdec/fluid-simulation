@@ -40,7 +40,7 @@ float calculateDensity(float2 point, const device Particle *particles, FrameUnif
 
 float convertDensityToPressure(float density, float targetDensity, float pressureMultiplier) {
     float ratio = density / targetDensity;
-    return pressureMultiplier * (pow(ratio, 7.0) - 1.0); 
+    return pressureMultiplier * (pow(ratio, 7.0) - 1.0);
 }
 
 float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms, float2 seed) {
@@ -57,7 +57,8 @@ float2 calculatePressureForce(uint particleIndex, const device Particle *particl
         float slope = smoothingKernelDerivative(uniforms.smoothingRadius, dst);
         // mass = 1
         float density = otherParticle.density;
-        pressureForce += otherParticle.pressure * dir * slope * 1 / density;
+        float sharedPressureValue = sharedPressure(density, thisParticle.density, uniforms);
+        pressureForce += sharedPressureValue * dir * slope * 1 / density;
     }
     
     return pressureForce;

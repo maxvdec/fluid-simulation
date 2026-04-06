@@ -21,6 +21,12 @@ float calculateDensity(float2 point, const device Particle *particles, FrameUnif
 float convertDensityToPressure(float density, float targetDensity, float pressureMultiplier);
 float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms, float2 seed);
 
+inline float sharedPressure(float densityA, float densityB, FrameUniforms uniforms) {
+    float pressureA = convertDensityToPressure(densityA, uniforms.targetDensity, uniforms.pressureMultiplier);
+    float pressureB = convertDensityToPressure(densityB, uniforms.targetDensity, uniforms.pressureMultiplier);
+    return (pressureA + pressureB) / 2;
+}
+
 inline float rand(float2 co) {
     return fract(sin(dot(co, float2(12.9898, 78.233))) * 43758.5453);
 }
