@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct Fluid_SimulationApp: App {
+    @State var properties: Properties = .init()
+    @Environment(\.openWindow) var openWindow
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(properties)
         }
     }
 }
