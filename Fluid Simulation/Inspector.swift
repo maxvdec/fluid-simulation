@@ -11,6 +11,19 @@ private struct InspectorFocusKey: FocusedValueKey {
     typealias Value = Binding<Bool>
 }
 
+struct BoolInput: View {
+    @Binding var value: Bool
+    var title: String
+    var body: some View {
+        HStack {
+            Text(title)
+
+            Toggle(isOn: $value) {}
+                .toggleStyle(.checkbox)
+        }
+    }
+}
+
 struct FloatInput: View {
     @Binding var value: Float
     var title: String
@@ -300,7 +313,15 @@ struct ControlsView: View {
                 title: "Collision Damping",
                 step: 0.01
             )
-
+            
+            FloatInput(
+                value: Binding(
+                    get: { properties.gravity },
+                    set: { properties.gravity = $0 }
+                ),
+                title: "Gravity",
+                step: 0.1
+            )
 
             Vec2Input(
                 x: Binding(
@@ -326,6 +347,31 @@ struct ControlsView: View {
                 ),
                 title: "Bounds",
                 step: 10.0
+            )
+            
+            BoolInput(
+                value: Binding(
+                    get: { properties.generateRandomly },
+                    set: { properties.generateRandomly = $0 }
+                ),
+                title: "Generate Randomly"
+            )
+            
+            BoolInput(
+                value: Binding(
+                    get: { properties.enableCollisions },
+                    set: { properties.enableCollisions = $0 }
+                ),
+                title: "Enable Collisions"
+            )
+            
+            IntInput(
+                value: Binding(
+                    get: { properties.particleCount },
+                    set: { properties.particleCount = $0 }
+                ),
+                title: "Particle Count",
+                step: 1
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

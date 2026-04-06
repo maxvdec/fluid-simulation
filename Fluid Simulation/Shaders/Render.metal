@@ -63,14 +63,16 @@ kernel void renderParticlesToTexture(const device Particle *particles [[buffer(B
             color = particles[i].color;
         }
     }
-        
-    // Draw borders
-    float borderWidth = 3.0;
-    float2 rectSize = uniforms.boundingBox;
-    float2 rectOrigin = float2(width, height) * 0.5 - rectSize * 0.5;
     
-    if (rectOutline(rectOrigin, rectSize, pixel, borderWidth)) {
-        color = float3(1.0, 1.0, 1.0);
+    if (uniforms.activateCollisions == 1) {
+        // Draw borders
+        float borderWidth = 3.0;
+        float2 rectSize = uniforms.boundingBox;
+        float2 rectOrigin = float2(width, height) * 0.5 - rectSize * 0.5;
+        
+        if (rectOutline(rectOrigin, rectSize, pixel, borderWidth)) {
+            color = float3(1.0, 1.0, 1.0);
+        }
     }
     
     outputTexture.write(float4(color, 1.0), gid);

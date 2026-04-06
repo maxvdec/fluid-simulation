@@ -50,7 +50,9 @@ kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParti
     p.velocity += getGravity(uniforms) * uniforms.deltaTime;
     p.position += p.velocity * uniforms.deltaTime;
     
-    resolveCollisions(p, uniforms);
+    if (uniforms.activateCollisions == 1) {
+        resolveCollisions(p, uniforms);
+    }
     
     particles[id] = p;
 }

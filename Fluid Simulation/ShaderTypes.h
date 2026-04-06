@@ -31,6 +31,7 @@ typedef struct {
     vector_float2 boundingBox;
     int isPaused;
     float collisionDamping;
+    int activateCollisions;
 } FrameUniforms;
 
 typedef enum BufferIndex {

@@ -13,11 +13,14 @@ final class Properties {
     var isPaused: Bool = true
     var started: Bool = false
 
-    var particleSize: Float = 30.0
-    var gravity: Float = 2000
+    var particleSize: Float = 10.0
+    var gravity: Float = 0
     var spacing: Float = 6.0
     var spawnArea: simd_float2 = .init(repeating: 500.0)
     var boundingBox: simd_float2 = .init(2200.0, 1300.0)
     var particleColor: NSColor = .cyan
-    var collisionDamping: Float = 1.0
+    var collisionDamping: Float = 0.0
+    var generateRandomly: Bool = true
+    var particleCount: Int = 1000
+    var enableCollisions = false
 }
