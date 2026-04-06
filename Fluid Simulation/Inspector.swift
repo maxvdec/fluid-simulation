@@ -17,7 +17,7 @@ struct FloatInput: View {
 
     var step: Float = 0.01
     var range: ClosedRange<Float> = -10_000 ... 10_000
-    var decimals: Int = 3
+    var decimals: Int = 2
 
     @State private var text: String = ""
     @FocusState private var isFocused: Bool
@@ -43,6 +43,9 @@ struct FloatInput: View {
                     if !isFocused {
                         Color.clear
                             .contentShape(Rectangle())
+                            .onTapGesture {
+                                isFocused = true
+                            }
                             .gesture(
                                 DragGesture(minimumDistance: 2)
                                     .onChanged { gesture in
@@ -126,6 +129,9 @@ struct IntInput: View {
                     if !isFocused {
                         Color.clear
                             .contentShape(Rectangle())
+                            .onTapGesture {
+                                isFocused = true
+                            }
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 2)
                                     .onChanged { gesture in
@@ -167,7 +173,7 @@ struct Vec2Input: View {
     var title: String
     var step: Float = 0.01
     var range: ClosedRange<Float> = -10_000 ... 10_000
-    var decimals: Int = 3
+    var decimals: Int = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -261,7 +267,7 @@ struct ControlsView: View {
                     properties.started = true
                     properties.isPaused.toggle()
                 } label: {
-                    Image(systemName: properties.isPaused ? "play.fill" : "pause.fill")
+                    Image(systemName: (properties.isPaused) ? "play.fill" : "pause.fill")
                 }
                 .keyboardShortcut(.space)
                 Spacer()

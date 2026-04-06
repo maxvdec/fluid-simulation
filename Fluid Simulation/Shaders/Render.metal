@@ -1,0 +1,66 @@
+#include <metal_stdlib>
+using namespace metal;
+
+#include "../ShaderTypes.h"
+
+bool circle(float2 center, float2 pixel, float radius) {
+    float2 d = pixel - center;
+    float dist = length(d);
+    return dist < radius;
+}
+
+kernel void renderParticlesToTexture(const device Particle *particles [[buffer(BufferIndexParticles)]],
+                                     constant FrameUniforms &uniforms [[buffer(BufferIndexUniforms)]],
+                                     texture2d<float, access::write> outputTexture [[texture(TextureIndexRenderTarget)]],
+                                     uint2 gid [[thread_position_in_grid]]) {
+    uint width = outputTexture.get_width();
+    uint height = outputTexture.get_height();
+
+    if (gid.x >= width || gid.y >= height) {
+        return;
+    }
+    
+    float2 pixel = float2(gid) + 0.5;
+    float radius = uniforms.pointSize * 0.5;
+    
+    float3 color = float3(0.0, 0.0, 0.0);
+    
+    for (uint i = 0; i < uniforms.particleCount; ++i) {
+        float2 center = particles[i].position;
+        
+        if (circle(center, pixel, radius)) {
+            color = particles[i].color;
+        }
+    }
+    
+    outputTexture.write(float4(color, 1.0), gid);
+}
+
+struct FullscreenOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+vertex FullscreenOut renderVertex(uint vid [[vertex_id]]) {
+    float2 positions[3] = {
+        float2(-1.0, -1.0),
+        float2( 3.0, -1.0),
+        float2(-1.0,  3.0)
+    };
+    float2 uvs[3] = {
+        float2(0.0, 1.0),
+        float2(2.0, 1.0),
+        float2(0.0, -1.0)
+    };
+
+    FullscreenOut out;
+    out.position = float4(positions[vid], 0.0, 1.0);
+    out.uv = uvs[vid];
+    return out;
+}
+
+fragment float4 renderFragment(FullscreenOut in [[stage_in]],
+                               texture2d<float> renderedTexture [[texture(TextureIndexRenderTarget)]]) {
+    constexpr sampler textureSampler(address::clamp_to_edge, filter::linear);
+    return renderedTexture.sample(textureSampler, in.uv);
+}

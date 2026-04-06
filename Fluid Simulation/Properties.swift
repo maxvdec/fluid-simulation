@@ -10,9 +10,10 @@ import SwiftUI
 
 @Observable
 final class Properties {
-    var isPaused: Bool = false
+    var isPaused: Bool = true
     var started: Bool = false
 
-    var particleSize: Float = 1.0
-    var particleColor: NSColor = .blue
+    var particleSize: Float = 30.0
+    var particleCount: Int = 1
+    var particleColor: NSColor = .cyan
 }

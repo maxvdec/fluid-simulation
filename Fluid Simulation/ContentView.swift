@@ -13,12 +13,10 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+            Viewport()
+                .environment(properties)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding()
         .environment(properties)
         .inspector(isPresented: $showInpsector) {
             ControlsView()
