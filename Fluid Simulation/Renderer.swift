@@ -135,6 +135,23 @@ final class Renderer: NSObject, MTKViewDelegate {
         }
     }
 
+    func logParticlePositions() {
+        guard let particleBuffer, cachedParticleCount > 0 else {
+            print("No particle data available")
+            return
+        }
+
+        let particles = particleBuffer.contents().bindMemory(
+            to: Particle.self,
+            capacity: cachedParticleCount
+        )
+
+        for i in 0 ..< cachedParticleCount {
+            let position = particles[i].position
+            print("Particle \(i): (\(position.x), \(position.y))")
+        }
+    }
+
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable,
               let renderPassDescriptor = view.currentRenderPassDescriptor,
@@ -323,9 +340,10 @@ final class Renderer: NSObject, MTKViewDelegate {
 
 struct Viewport: NSViewRepresentable {
     @Environment(Properties.self) var properties
+    let renderer: Renderer
 
     func makeCoordinator() -> Renderer {
-        Renderer()
+        renderer
     }
 
     func makeNSView(context: Context) -> MTKView {

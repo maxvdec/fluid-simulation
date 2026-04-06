@@ -42,3 +42,23 @@ float convertDensityToPressure(float density, float targetDensity, float pressur
     float pressure = densityError * pressureMultiplier;
     return pressure;
 }
+
+float2 calculatePressureForce(uint particleIndex, const device Particle *particles, FrameUniforms uniforms) {
+    float2 pressureForce = float2(0.0);
+    Particle thisParticle = particles[particleIndex];
+    
+    for (uint otherIndex = 0; otherIndex < uniforms.particleCount; ++otherIndex) {
+        if (particleIndex == otherIndex) continue;
+        
+        Particle otherParticle = particles[otherIndex];
+        float2 offset = otherParticle.position - thisParticle.position;
+        float dst = length(offset);
+        float2 dir = offset / dst;
+        float slope = smoothingKernelDerivative(uniforms.smoothingRadius, dst);
+        // mass = 1
+        float density = otherParticle.density;
+        pressureForce += otherParticle.pressure * dir * slope * 1 / density;
+    }
+    
+    return pressureForce;
+}

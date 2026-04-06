@@ -10,16 +10,17 @@ import SwiftUI
 struct ContentView: View {
     @Environment(Properties.self) var properties
     @State private var showInpsector = true
+    @State private var renderer = Renderer()
 
     var body: some View {
         VStack {
-            Viewport()
+            Viewport(renderer: renderer)
                 .environment(properties)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .environment(properties)
         .inspector(isPresented: $showInpsector) {
-            ControlsView()
+            ControlsView(renderer: renderer)
                 .environment(properties)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
                 .padding()

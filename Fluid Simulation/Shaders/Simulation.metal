@@ -50,7 +50,14 @@ kernel void updateParticles(device Particle *particles [[buffer(BufferIndexParti
     p.density = calculateDensity(p.position, particles, uniforms) * uniforms.densityMultiplier;
     p.pressure = convertDensityToPressure(p.density, uniforms.targetDensity, uniforms.pressureMultiplier);
     
+    // Gravity
     p.velocity += getGravity(uniforms) * uniforms.deltaTime;
+    
+    // Pressure force
+    float2 pressureForce = calculatePressureForce(id, particles, uniforms);
+    float2 pressureAcceleration = pressureForce / p.density;
+    p.velocity += pressureAcceleration * uniforms.deltaTime;
+    
     p.position += p.velocity * uniforms.deltaTime;
     
     if (uniforms.activateCollisions == 1) {

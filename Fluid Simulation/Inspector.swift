@@ -252,6 +252,7 @@ struct Vec3Input: View {
 
 struct ControlsView: View {
     @Environment(Properties.self) var properties
+    let renderer: Renderer
 
     @FocusState private var inspectorFocused: Bool
 
@@ -276,6 +277,10 @@ struct ControlsView: View {
                 }
                 .keyboardShortcut(.space)
                 Spacer()
+            }
+
+            Button("Log Particle Positions") {
+                renderer.logParticlePositions()
             }
 
             Text("Particles")
